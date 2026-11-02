@@ -18,18 +18,14 @@ Code, CLI flags, Protobuf identifiers, and quoted output retain their exact spel
 - Commands match the implemented CLI.
 - Claims distinguish measured results from design intent.
 
-## Corrections
+## Review results
 
-| Rule | Earlier wording | Final wording |
-|---|---|---|
-| 3.2 | “Workers should renew their leases.” | “Workers renew the lease every second.” |
-| 4.2 | “You can watch it while it’s running.” | “The client receives progress through `WatchJob`.” |
-| 5.4 | “Restart workers if they stop.” | “If the workers stop, restart them.” |
-| 1.11 | “Settings” and “configuration” for the same document | “Configuration” throughout the prose |
-
-The final pass includes sentence length, contractions, filler, terminology, local links, and command examples.
-This review is an editorial aid. It does not certify compliance with the official ASD-STE100 dictionary.
-
-The three longest prose sentences in the initial final pass contained 18, 16, and 16 words.
-The mechanical scan found no unapproved modals outside the quoted correction examples.
+The three longest prose sentences in the review pass contained 18, 16, and 16 words.
+The mechanical scan found no contractions, unapproved modals, or filler in the final prose.
 Local Markdown links resolved to existing files.
+The financial demo commands completed against the Compose stack.
+
+The review also checked terminology and the distinction between successful analysis and valid data.
+Performance claims identify their workload and measurement scope.
+
+This review is an editorial aid. It does not certify compliance with the official ASD-STE100 dictionary.
