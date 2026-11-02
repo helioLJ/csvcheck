@@ -4,6 +4,7 @@ The source contract is [service.proto](../api/csvcheck/v1/service.proto).
 All RPCs require a bearer token in the `authorization` metadata.
 Public RPCs use `CLIENT_TOKEN`. Worker RPCs use `WORKER_TOKEN`.
 These tokens separate roles, not individual users or workers.
+The standard gRPC health service uses the client token. Compose waits for readiness before it starts workers.
 
 ## Public service
 
@@ -65,6 +66,7 @@ The error sample includes column names and error codes, without source values.
 | `FAILED_PRECONDITION` | Attempt lost ownership |
 | `UNAUTHENTICATED` | Missing token or wrong role token |
 | `DEADLINE_EXCEEDED` | Client deadline expired |
+| `RESOURCE_EXHAUSTED` | Upload exceeds the file limit |
 | `INTERNAL` | Unexpected storage or database error |
 
 A timeout does not prove that a write failed. Repeat a submission with the same key.
@@ -110,4 +112,4 @@ make proto
 git diff -- api/csvcheck/v1
 ```
 
-The script installs pinned generators into `.tools`. It downloads the official Protobuf 33.0 compiler.
+The script installs pinned generators into `.tools`. It downloads the official Protobuf 33.0 compiler and checks its SHA-256 digest.

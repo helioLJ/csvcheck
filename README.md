@@ -110,7 +110,7 @@ make bench
 Unit tests run without PostgreSQL. Integration tests require an explicit database URL:
 
 ```bash
-docker compose -f compose.yaml -f compose.test.yaml up -d postgres
+docker compose -f compose.yaml -f compose.test.yaml up -d --wait postgres
 export TEST_DATABASE_URL='postgres://csvcheck:local-demo-only@localhost:55432/csvcheck?sslmode=disable'
 make integration
 ```
@@ -127,6 +127,7 @@ CI runs integration tests, the race detector, parser fuzzing, and the container 
 | [Use cases and tests](docs/testing.md) | Expected behavior and test coverage |
 | [Operations](docs/operations.md) | Configuration, recovery exercise, and local limits |
 | [Performance](docs/performance.md) | Reproduction commands and measured results |
+| [Dependencies](docs/dependencies.md) | Direct dependencies, versions, and transitive scope |
 | [Documentation review](docs/documentation-review.md) | Simple English review and scope |
 
 ## Scope

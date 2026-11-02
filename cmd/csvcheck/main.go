@@ -21,6 +21,7 @@ import (
 	"github.com/helioLJ/csvcheck/internal/validation"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
+	healthpb "google.golang.org/grpc/health/grpc_health_v1"
 	"google.golang.org/protobuf/encoding/protojson"
 	"google.golang.org/protobuf/proto"
 )
@@ -33,7 +34,7 @@ func main() {
 }
 func run(args []string) error {
 	if len(args) == 0 {
-		return errors.New("usage: csvcheck <upload|submit|get|watch|cancel|download|generate|demo> [flags]")
+		return errors.New("usage: csvcheck <upload|submit|get|watch|cancel|download|generate|demo|health> [flags]")
 	}
 	command := args[0]
 	flags := flag.NewFlagSet(command, flag.ContinueOnError)
@@ -74,6 +75,15 @@ func run(args []string) error {
 	defer conn.Close()
 	client := pb.NewValidationServiceClient(conn)
 	switch command {
+	case "health":
+		response, err := healthpb.NewHealthClient(conn).Check(ctx, &healthpb.HealthCheckRequest{})
+		if err != nil {
+			return err
+		}
+		if response.Status != healthpb.HealthCheckResponse_SERVING {
+			return errors.New("coordinator is not ready")
+		}
+		return nil
 	case "upload":
 		f, err := upload(ctx, client, *input)
 		if err != nil {

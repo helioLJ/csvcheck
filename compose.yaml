@@ -39,13 +39,19 @@ services:
     depends_on:
       migrate:
         condition: service_completed_successfully
+    healthcheck:
+      test: [CMD, csvcheck, health, -addr, localhost:50051, -timeout, 2s]
+      interval: 2s
+      timeout: 3s
+      retries: 20
+      start_period: 3s
     restart: unless-stopped
   worker:
     <<: *app
     entrypoint: [worker]
     depends_on:
       coordinator:
-        condition: service_started
+        condition: service_healthy
     restart: unless-stopped
   cli:
     <<: *app
@@ -55,7 +61,7 @@ services:
       - ./reports:/reports
     depends_on:
       coordinator:
-        condition: service_started
+        condition: service_healthy
 volumes:
   files:
   postgres:

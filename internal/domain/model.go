@@ -8,6 +8,7 @@ import (
 )
 
 var (
+	ErrLimit    = errors.New("resource limit exceeded")
 	ErrInvalid  = errors.New("invalid request")
 	ErrNotFound = errors.New("resource not found")
 	ErrConflict = errors.New("request conflicts with existing state")

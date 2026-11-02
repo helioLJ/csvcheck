@@ -1,0 +1,26 @@
+{
+  "date": "2026-11-02",
+  "environment": "Docker Desktop on macOS arm64",
+  "input_bytes": 198888929,
+  "injected_failure": "docker compose kill worker while RUNNING",
+  "event_kinds": [
+    "submitted",
+    "started",
+    "lease_expired",
+    "started",
+    "progress",
+    "progress",
+    "progress",
+    "progress",
+    "completed"
+  ],
+  "attempt_count": 2,
+  "final_state": "SUCCEEDED",
+  "summary": {
+    "records": 8000000,
+    "invalid_records": 800000,
+    "violations": 800000,
+    "sampled_violations": 1000,
+    "bytes_consumed": 198888929
+  }
+}

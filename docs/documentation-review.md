@@ -29,3 +29,7 @@ Code, CLI flags, Protobuf identifiers, and quoted output retain their exact spel
 
 The final pass includes sentence length, contractions, filler, terminology, local links, and command examples.
 This review is an editorial aid. It does not certify compliance with the official ASD-STE100 dictionary.
+
+The three longest prose sentences in the initial final pass contained 18, 16, and 16 words.
+The mechanical scan found no unapproved modals outside the quoted correction examples.
+Local Markdown links resolved to existing files.

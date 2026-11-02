@@ -17,6 +17,8 @@ import (
 	"github.com/helioLJ/csvcheck/internal/storage"
 	"github.com/helioLJ/csvcheck/internal/transport"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/health"
+	healthpb "google.golang.org/grpc/health/grpc_health_v1"
 )
 
 func main() {
@@ -61,6 +63,9 @@ func run() error {
 	handler := &transport.Server{Service: &coordinator.Service{Repo: db, Files: files}}
 	pb.RegisterValidationServiceServer(server, handler)
 	pb.RegisterWorkerServiceServer(server, handler)
+	healthServer := health.NewServer()
+	healthServer.SetServingStatus("", healthpb.HealthCheckResponse_SERVING)
+	healthpb.RegisterHealthServer(server, healthServer)
 	reaperDone := make(chan struct{})
 	go func() {
 		defer close(reaperDone)

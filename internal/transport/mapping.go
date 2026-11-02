@@ -83,6 +83,8 @@ func rpcError(err error) error {
 		return nil
 	}
 	switch {
+	case errors.Is(err, domain.ErrLimit):
+		return status.Error(codes.ResourceExhausted, err.Error())
 	case errors.Is(err, domain.ErrInvalid):
 		return status.Error(codes.InvalidArgument, err.Error())
 	case errors.Is(err, domain.ErrNotFound):

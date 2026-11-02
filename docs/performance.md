@@ -65,3 +65,12 @@ Upload and download buffers contain at most 64 KiB per chunk.
 
 Exact decimal validation uses rational arithmetic from the Go standard library.
 This choice favors explicit decimal semantics. A benchmark can guide later representation changes.
+
+## Recovery run
+
+A local Docker run processed a 198,888,929-byte CSV with 8,000,000 records.
+The worker container stopped during the first attempt. After lease expiry, a replacement attempt completed the analysis.
+The report contained 800,000 invalid records and 1,000 samples.
+
+[Recovery evidence](recovery-evidence.json) records the workload, injected failure, events, and final counts.
+This run demonstrates recovery for one workload. It does not measure peak memory or a recovery-time percentile.

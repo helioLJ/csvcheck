@@ -6,6 +6,8 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"errors"
+	"fmt"
+	"github.com/helioLJ/csvcheck/internal/domain"
 	"io"
 	"os"
 	"path/filepath"
@@ -74,7 +76,7 @@ func (l *Local) Put(ctx context.Context, key string, source io.Reader) (size int
 			size += int64(n)
 		}
 		if size > MaxFileBytes {
-			return 0, "", errors.New("file exceeds 1 GiB limit")
+			return 0, "", fmt.Errorf("%w: file exceeds 1 GiB", domain.ErrLimit)
 		}
 		if readErr == io.EOF {
 			break
