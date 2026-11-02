@@ -1,0 +1,93 @@
+syntax = "proto3";
+package csvcheck.v1;
+option go_package = "github.com/helioLJ/csvcheck/api/csvcheck/v1;csvcheckv1";
+
+service ValidationService {
+  rpc UploadFile(stream UploadFileRequest) returns (File);
+  rpc SubmitJob(SubmitJobRequest) returns (Job);
+  rpc GetJob(GetJobRequest) returns (Job);
+  rpc WatchJob(WatchJobRequest) returns (stream JobEvent);
+  rpc CancelJob(GetJobRequest) returns (Job);
+  rpc DownloadArtifact(DownloadArtifactRequest) returns (stream ArtifactChunk);
+}
+service WorkerService {
+  rpc ClaimJob(ClaimJobRequest) returns (ClaimJobResponse);
+  rpc Heartbeat(HeartbeatRequest) returns (HeartbeatResponse);
+  rpc CompleteAttempt(CompleteAttemptRequest) returns (Job);
+  rpc FailAttempt(FailAttemptRequest) returns (Job);
+}
+message UploadFileRequest {
+  oneof payload { UploadMetadata metadata = 1; bytes chunk = 2; }
+}
+message UploadMetadata { string filename = 1; }
+message File { string id = 1; string filename = 2; int64 size_bytes = 3; string sha256 = 4; }
+message ValidationConfig { string delimiter = 1; repeated ColumnRule rules = 2; }
+message ColumnRule {
+  string column = 1;
+  bool required_column = 2;
+  bool required_value = 3;
+  oneof constraint {
+    DecimalConstraint decimal = 4;
+    DateConstraint date = 5;
+    TextConstraint text = 6;
+  }
+}
+message DecimalConstraint {
+  optional string minimum = 1;
+  optional string maximum = 2;
+  bool minimum_exclusive = 3;
+  bool maximum_exclusive = 4;
+}
+message DateConstraint { string format = 1; } // MVP: YYYY-MM-DD only.
+message TextConstraint { optional uint32 min_length = 1; optional uint32 max_length = 2; }
+message SubmitJobRequest { string idempotency_key = 1; string file_id = 2; ValidationConfig config = 3; }
+message GetJobRequest { string job_id = 1; }
+message WatchJobRequest { string job_id = 1; int64 after_sequence = 2; }
+message Job {
+  string id = 1;
+  string state = 2;
+  string validation_outcome = 3;
+  string file_id = 4;
+  ValidationConfig config = 5;
+  int32 attempt_count = 6;
+  int32 max_attempts = 7;
+  string current_attempt = 8;
+  bool cancel_requested = 9;
+  Progress progress = 10;
+  Summary summary = 11;
+  repeated PublishedArtifact artifacts = 12;
+  string last_error = 13;
+  int64 last_event_sequence = 14;
+  string created_at = 15; // RFC 3339 UTC.
+  string updated_at = 16; // RFC 3339 UTC.
+}
+message PublishedArtifact { string kind = 1; int64 size_bytes = 2; string sha256 = 3; }
+message JobEvent { int64 sequence = 1; string kind = 2; Job job = 3; }
+message DownloadArtifactRequest { string job_id = 1; string kind = 2; }
+message ArtifactChunk { bytes data = 1; }
+message ClaimJobRequest { string worker_id = 1; }
+message ClaimJobResponse { optional Assignment assignment = 1; }
+message Assignment {
+  string job_id = 1;
+  string attempt_id = 2;
+  string lease_token = 3;
+  int64 lease_expires_unix = 4;
+  string input_key = 5;
+  int64 input_size = 6;
+  ValidationConfig config = 7;
+  string output_prefix = 8;
+}
+message AttemptRef { string job_id = 1; string attempt_id = 2; string lease_token = 3; }
+message Progress { int64 bytes_consumed = 1; int64 records_processed = 2; }
+message HeartbeatRequest { AttemptRef attempt = 1; Progress progress = 2; }
+message HeartbeatResponse { bool cancel_requested = 1; int64 lease_expires_unix = 2; }
+message Summary {
+  int64 records = 1;
+  int64 invalid_records = 2;
+  int64 violations = 3;
+  int64 sampled_violations = 4;
+  int64 bytes_consumed = 5;
+}
+message Artifact { string kind = 1; string key = 2; int64 size_bytes = 3; string sha256 = 4; }
+message CompleteAttemptRequest { AttemptRef attempt = 1; Summary summary = 2; repeated Artifact artifacts = 3; }
+message FailAttemptRequest { AttemptRef attempt = 1; string code = 2; string message = 3; }

@@ -1,0 +1,9 @@
+.tools/
+bin/
+data/
+reports/
+.env
+*.out
+coverage.txt
+*.test
+.DS_Store

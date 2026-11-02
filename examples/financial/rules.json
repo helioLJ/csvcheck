@@ -1,0 +1,10 @@
+{
+  "delimiter": ",",
+  "rules": [
+    {"column": "transaction_id", "required_column": true, "required_value": true},
+    {"column": "amount", "required_column": true, "required_value": true,
+      "decimal": {"minimum": "0", "minimum_exclusive": true}},
+    {"column": "created_at", "required_column": true, "required_value": true,
+      "date": {"format": "YYYY-MM-DD"}}
+  ]
+}

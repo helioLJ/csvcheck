@@ -1,0 +1,61 @@
+name: csvcheck
+x-app: &app
+  build: .
+  environment: &environment
+    DATABASE_URL: postgres://csvcheck:local-demo-only@postgres:5432/csvcheck?sslmode=disable
+    DATA_DIR: /data
+    CLIENT_TOKEN: ${CLIENT_TOKEN:-local-client-demo-token}
+    WORKER_TOKEN: ${WORKER_TOKEN:-local-worker-demo-token}
+    COORDINATOR_ADDR: coordinator:50051
+  volumes:
+    - files:/data
+services:
+  postgres:
+    image: postgres:17.6-bookworm
+    environment:
+      POSTGRES_USER: csvcheck
+      POSTGRES_PASSWORD: local-demo-only
+      POSTGRES_DB: csvcheck
+    volumes:
+      - postgres:/var/lib/postgresql/data
+    healthcheck:
+      test: [CMD-SHELL, 'pg_isready -U csvcheck -d csvcheck']
+      interval: 2s
+      timeout: 3s
+      retries: 30
+  migrate:
+    <<: *app
+    command: [migrate]
+    depends_on:
+      postgres:
+        condition: service_healthy
+  coordinator:
+    <<: *app
+    environment:
+      <<: *environment
+      LISTEN_ADDR: 0.0.0.0:50051
+    ports:
+      - '127.0.0.1:50051:50051'
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+    restart: unless-stopped
+  worker:
+    <<: *app
+    entrypoint: [worker]
+    depends_on:
+      coordinator:
+        condition: service_started
+    restart: unless-stopped
+  cli:
+    <<: *app
+    entrypoint: [csvcheck]
+    profiles: [tools]
+    volumes:
+      - ./reports:/reports
+    depends_on:
+      coordinator:
+        condition: service_started
+volumes:
+  files:
+  postgres:
