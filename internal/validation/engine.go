@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"io"
 	"strconv"
+	"strings"
 	"time"
 	"unicode/utf8"
 
@@ -52,7 +53,7 @@ func Run(ctx context.Context, input io.Reader, config domain.Config, errorsOutpu
 	emit := func(column, code string) error {
 		sum.Violations++
 		if sum.SampledViolations < MaxSampleErrors {
-			if err := writer.Write([]string{strconv.FormatInt(record, 10), column, code}); err != nil {
+			if err := writer.Write([]string{strconv.FormatInt(record, 10), safeCell(column), code}); err != nil {
 				return err
 			}
 			sum.SampledViolations++
@@ -86,6 +87,9 @@ func Run(ctx context.Context, input io.Reader, config domain.Config, errorsOutpu
 	}
 	columns := map[string]int{}
 	for i, name := range header {
+		if strings.HasPrefix(name, "\ufeff") {
+			return sum, errors.New("UTF-8 byte-order marks are not supported")
+		}
 		if name == "" {
 			return sum, errors.New("CSV header contains an empty column")
 		}
@@ -184,4 +188,12 @@ func checkValue(value string, r domain.Rule) string {
 		}
 	}
 	return ""
+}
+
+// Report column names can originate in user input. Neutralize spreadsheet formulas.
+func safeCell(value string) string {
+	if value != "" && strings.ContainsRune("=+-@\t\r\n", rune(value[0])) {
+		return "'" + value
+	}
+	return value
 }

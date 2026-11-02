@@ -46,7 +46,7 @@ func fixture(t *testing.T) (*grpc.ClientConn, *coordinator.Service) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	cfg.ConnConfig.RuntimeParams["search_path"] = name
+	cfg.ConnConfig.RuntimeParams["search_path"] = quoted
 	pool, err := pgxpool.NewWithConfig(ctx, cfg)
 	if err != nil {
 		t.Fatal(err)
@@ -257,5 +257,58 @@ func TestRejectIncompleteUploadAndMalformedCSV(t *testing.T) {
 	}
 	if final.State != "FAILED" || !strings.HasPrefix(final.LastError, "INVALID_CSV") {
 		t.Fatal(final)
+	}
+}
+
+func TestRecoveryPublishesOnlyReplacementAttempt(t *testing.T) {
+	conn, service := fixture(t)
+	base, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	ctx := transport.Outgoing(base, "client-secret")
+	client := pb.NewValidationServiceClient(conn)
+	f := upload(t, ctx, client, "amount\n1.25\n")
+	j, err := client.SubmitJob(ctx, &pb.SubmitJobRequest{FileId: f.Id, IdempotencyKey: "recovery", Config: rule()})
+	if err != nil {
+		t.Fatal(err)
+	}
+	wc := pb.NewWorkerServiceClient(conn)
+	workerCtx := transport.Outgoing(base, "worker-secret")
+	claim, err := wc.ClaimJob(workerCtx, &pb.ClaimJobRequest{WorkerId: "disappeared"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	store := service.Repo.(*postgres.Store)
+	if _, err = store.Pool.Exec(base, "UPDATE job_attempts SET expires_at=clock_timestamp()-interval '1 second' WHERE id=$1", claim.Assignment.AttemptId); err != nil {
+		t.Fatal(err)
+	}
+	if err = store.Reap(base); err != nil {
+		t.Fatal(err)
+	}
+	runCtx, stop := context.WithCancel(workerCtx)
+	done := make(chan struct{})
+	defer func() { stop(); <-done }()
+	w := worker.Worker{Client: wc, Files: service.Files, ID: "replacement"}
+	go func() { defer close(done); _ = w.Run(runCtx) }()
+	events, err := client.WatchJob(ctx, &pb.WatchJobRequest{JobId: j.Id})
+	if err != nil {
+		t.Fatal(err)
+	}
+	var final *pb.Job
+	for {
+		event, err := events.Recv()
+		if err == io.EOF {
+			break
+		}
+		if err != nil {
+			t.Fatal(err)
+		}
+		final = event.Job
+	}
+	if final.State != "SUCCEEDED" || final.AttemptCount != 2 || final.CurrentAttempt == claim.Assignment.AttemptId {
+		t.Fatal(final)
+	}
+	heartbeat, err := wc.Heartbeat(workerCtx, &pb.HeartbeatRequest{Attempt: &pb.AttemptRef{JobId: j.Id, AttemptId: claim.Assignment.AttemptId, LeaseToken: claim.Assignment.LeaseToken}})
+	if err != nil || !heartbeat.CancelRequested {
+		t.Fatal(heartbeat, err)
 	}
 }

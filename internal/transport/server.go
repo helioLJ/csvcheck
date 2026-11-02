@@ -4,7 +4,9 @@ import (
 	"context"
 	"errors"
 	"io"
+	"strings"
 	"time"
+	"unicode/utf8"
 
 	pb "github.com/helioLJ/csvcheck/api/csvcheck/v1"
 	"github.com/helioLJ/csvcheck/internal/coordinator"
@@ -142,7 +144,7 @@ func (s *Server) DownloadArtifact(r *pb.DownloadArtifactRequest, stream grpc.Ser
 	}
 }
 func (s *Server) ClaimJob(ctx context.Context, r *pb.ClaimJobRequest) (*pb.ClaimJobResponse, error) {
-	if len(r.WorkerId) < 1 || len(r.WorkerId) > 128 {
+	if len(r.WorkerId) < 1 || len(r.WorkerId) > 128 || !utf8.ValidString(r.WorkerId) || strings.ContainsRune(r.WorkerId, 0) {
 		return nil, status.Error(codes.InvalidArgument, "worker ID must contain 1 to 128 characters")
 	}
 	a, err := s.Service.Repo.Claim(ctx, r.WorkerId)

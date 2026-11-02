@@ -9,9 +9,10 @@ import (
 	"path"
 	"strings"
 	"time"
+	"unicode/utf8"
 
 	"github.com/helioLJ/csvcheck/internal/domain"
-	"github.com/helioLJ/csvcheck/internal/storage"
+
 	"github.com/helioLJ/csvcheck/internal/validation"
 )
 
@@ -28,14 +29,19 @@ type Repository interface {
 	Cancel(context.Context, string) (domain.Job, error)
 	Artifact(context.Context, string, string) (domain.Artifact, error)
 }
+type BlobStore interface {
+	Put(context.Context, string, io.Reader) (int64, string, error)
+	Inspect(context.Context, string) (int64, string, error)
+	Open(string) (io.ReadCloser, error)
+}
 type Service struct {
 	Repo  Repository
-	Files *storage.Local
+	Files BlobStore
 }
 
 func invalid(message string) error { return fmt.Errorf("%w: %s", domain.ErrInvalid, message) }
 func (s *Service) Upload(ctx context.Context, name string, reader io.Reader) (domain.File, error) {
-	if name == "" || len(name) > 200 || strings.ContainsAny(name, "/\\\x00\r\n") {
+	if !utf8.ValidString(name) || name == "" || len(name) > 200 || strings.ContainsAny(name, "/\\\x00\r\n") {
 		return domain.File{}, invalid("invalid display filename")
 	}
 	f := domain.File{ID: domain.ID(), Filename: name}
@@ -50,6 +56,11 @@ func (s *Service) Upload(ctx context.Context, name string, reader io.Reader) (do
 func (s *Service) Submit(ctx context.Context, key, file string, c domain.Config) (domain.Job, error) {
 	if len(key) < 1 || len(key) > 128 || strings.TrimSpace(key) != key {
 		return domain.Job{}, invalid("idempotency key must contain 1 to 128 characters without surrounding spaces")
+	}
+	for _, ch := range key {
+		if ch < 33 || ch > 126 {
+			return domain.Job{}, invalid("idempotency key must use printable ASCII without spaces")
+		}
 	}
 	if err := validation.CheckConfig(c); err != nil {
 		return domain.Job{}, err

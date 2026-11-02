@@ -7,22 +7,28 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"log/slog"
+	"os"
 	"sync"
 	"time"
 
 	pb "github.com/helioLJ/csvcheck/api/csvcheck/v1"
 	"github.com/helioLJ/csvcheck/internal/domain"
-	"github.com/helioLJ/csvcheck/internal/storage"
+
 	"github.com/helioLJ/csvcheck/internal/transport"
 	"github.com/helioLJ/csvcheck/internal/validation"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 )
 
+type BlobStore interface {
+	Open(string) (io.ReadCloser, error)
+	Put(context.Context, string, io.Reader) (int64, string, error)
+}
 type Worker struct {
 	Client            pb.WorkerServiceClient
-	Files             *storage.Local
+	Files             BlobStore
 	ID                string
 	HeartbeatInterval time.Duration
 }
@@ -140,6 +146,10 @@ func (w *Worker) execute(ctx context.Context, a *pb.Assignment, progress func(do
 	var sample bytes.Buffer
 	sum, err := validation.Run(ctx, input, transport.Config(a.Config), &sample, progress)
 	if err != nil {
+		var pathErr *os.PathError
+		if errors.As(err, &pathErr) {
+			return sum, nil, err
+		}
 		return sum, nil, &CSVError{Err: err}
 	}
 	report := struct {

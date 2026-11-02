@@ -83,14 +83,20 @@ func (s *Store) AddFile(ctx context.Context, f domain.File) error {
 	_, err := s.Pool.Exec(ctx, "INSERT INTO files(id,filename,storage_key,size_bytes,sha256) VALUES($1,$2,$3,$4,$5)", f.ID, f.Filename, f.Key, f.Size, f.SHA256)
 	return err
 }
-func (s *Store) File(ctx context.Context, id string) (domain.File, error) {
+func readFile(ctx context.Context, q interface {
+	QueryRow(context.Context, string, ...any) pgx.Row
+}, id string) (domain.File, error) {
 	var f domain.File
-	err := s.Pool.QueryRow(ctx, "SELECT id,filename,storage_key,size_bytes,sha256 FROM files WHERE id=$1", id).Scan(&f.ID, &f.Filename, &f.Key, &f.Size, &f.SHA256)
+	err := q.QueryRow(ctx, "SELECT id,filename,storage_key,size_bytes,sha256 FROM files WHERE id=$1", id).Scan(&f.ID, &f.Filename, &f.Key, &f.Size, &f.SHA256)
 	if errors.Is(err, pgx.ErrNoRows) {
 		err = domain.ErrNotFound
 	}
 	return f, err
 }
+func (s *Store) File(ctx context.Context, id string) (domain.File, error) {
+	return readFile(ctx, s.Pool, id)
+}
+
 func (s *Store) Submit(ctx context.Context, key, file string, c domain.Config) (domain.Job, error) {
 	b, _ := json.Marshal(struct {
 		File   string
@@ -186,7 +192,7 @@ func (s *Store) Claim(ctx context.Context, worker string) (*domain.Assignment, e
 	if err != nil {
 		return nil, err
 	}
-	f, err := s.File(ctx, j.FileID)
+	f, err := readFile(ctx, tx, j.FileID)
 	if err != nil {
 		return nil, err
 	}
@@ -234,7 +240,7 @@ func (s *Store) Heartbeat(ctx context.Context, r domain.AttemptRef, p domain.Pro
 	if err != nil {
 		return time.Time{}, err
 	}
-	f, err := s.File(ctx, j.FileID)
+	f, err := readFile(ctx, tx, j.FileID)
 	if err != nil {
 		return time.Time{}, err
 	}
@@ -379,7 +385,7 @@ func (s *Store) reapOne(ctx context.Context) (bool, error) {
 	defer rollback(tx)
 	var b []byte
 	var attempt string
-	err = tx.QueryRow(ctx, "SELECT j.snapshot,a.id FROM jobs j JOIN job_attempts a ON a.job_id=j.id WHERE j.state='RUNNING' AND a.state='RUNNING' AND a.expires_at<=clock_timestamp() ORDER BY a.expires_at FOR UPDATE OF j,a SKIP LOCKED LIMIT 1").Scan(&b, &attempt)
+	err = tx.QueryRow(ctx, "SELECT j.snapshot,a.id FROM jobs j JOIN job_attempts a ON a.job_id=j.id WHERE j.state='RUNNING' AND a.state='RUNNING' AND a.expires_at<=clock_timestamp() ORDER BY a.expires_at FOR UPDATE OF j SKIP LOCKED LIMIT 1").Scan(&b, &attempt)
 	if errors.Is(err, pgx.ErrNoRows) {
 		return false, nil
 	}

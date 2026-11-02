@@ -33,7 +33,7 @@ func testStore(t *testing.T) *Store {
 	if err != nil {
 		t.Fatal(err)
 	}
-	cfg.ConnConfig.RuntimeParams["search_path"] = name
+	cfg.ConnConfig.RuntimeParams["search_path"] = quoted
 	cfg.MaxConns = 12
 	pool, err := pgxpool.NewWithConfig(ctx, cfg)
 	if err != nil {
@@ -213,5 +213,93 @@ func TestRetriesExhaustAndProgress(t *testing.T) {
 	final, _ := s.Get(ctx, j.ID)
 	if final.State != "FAILED" || final.AttemptCount != 3 {
 		t.Fatal(final)
+	}
+}
+
+func TestRollbackDoesNotPublishHalfCompletion(t *testing.T) {
+	s := testStore(t)
+	j := seed(t, s)
+	ctx := context.Background()
+	a, err := s.Claim(ctx, "worker")
+	if err != nil {
+		t.Fatal(err)
+	}
+	// The second insert fails its kind constraint, after the first insert succeeds.
+	artifacts := []domain.Artifact{{Kind: "summary", Key: domain.ID()}, {Kind: "invalid", Key: domain.ID()}}
+	if _, err = s.Complete(ctx, a.AttemptRef, domain.Summary{}, artifacts); err == nil {
+		t.Fatal("expected database failure")
+	}
+	var count int
+	if err = s.Pool.QueryRow(ctx, "SELECT count(*) FROM artifacts WHERE job_id=$1", j.ID).Scan(&count); err != nil {
+		t.Fatal(err)
+	}
+	current, err := s.Get(ctx, j.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if count != 0 || current.State != "RUNNING" || current.Sequence != 2 {
+		t.Fatalf("half completion: count=%d job=%+v", count, current)
+	}
+}
+func TestLeaseExpiryExhaustsAttempts(t *testing.T) {
+	s := testStore(t)
+	j := seed(t, s)
+	ctx := context.Background()
+	for range 3 {
+		a, err := s.Claim(ctx, "worker")
+		if err != nil || a == nil {
+			t.Fatal(a, err)
+		}
+		if _, err = s.Pool.Exec(ctx, "UPDATE job_attempts SET expires_at=clock_timestamp()-interval '1 second' WHERE id=$1", a.AttemptID); err != nil {
+			t.Fatal(err)
+		}
+		if err = s.Reap(ctx); err != nil {
+			t.Fatal(err)
+		}
+	}
+	final, err := s.Get(ctx, j.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if final.State != "FAILED" {
+		t.Fatal(final)
+	}
+}
+
+func TestClaimsBeyondPoolCapacity(t *testing.T) {
+	s := testStore(t)
+	for range 24 {
+		seed(t, s)
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+	var wg sync.WaitGroup
+	ids := make(chan string, 24)
+	errs := make(chan error, 24)
+	for range 24 {
+		wg.Go(func() {
+			a, err := s.Claim(ctx, domain.ID())
+			if err != nil {
+				errs <- err
+			} else if a != nil {
+				ids <- a.JobID
+			}
+		})
+	}
+	wg.Wait()
+	close(ids)
+	close(errs)
+	for err := range errs {
+		t.Fatal(err)
+	}
+	seen := map[string]bool{}
+	for id := range ids {
+		if seen[id] {
+			t.Fatal("duplicate active job")
+		}
+		seen[id] = true
+	}
+	if len(seen) != 24 {
+		t.Fatalf("claimed %d jobs", len(seen))
 	}
 }

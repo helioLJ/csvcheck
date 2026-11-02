@@ -36,7 +36,7 @@ func (l *Local) Path(key string) (string, error) {
 	}
 	return filepath.Join(l.Root, clean), nil
 }
-func (l *Local) Open(key string) (*os.File, error) {
+func (l *Local) Open(key string) (io.ReadCloser, error) {
 	p, err := l.Path(key)
 	if err != nil {
 		return nil, err

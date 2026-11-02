@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"math/big"
 	"regexp"
+	"strings"
 	"unicode/utf8"
 
 	"github.com/helioLJ/csvcheck/internal/domain"
@@ -28,7 +29,7 @@ func CheckConfig(c domain.Config) error {
 	}
 	names := map[string]bool{}
 	for _, r := range c.Rules {
-		if r.Column == "" || len(r.Column) > 128 || !utf8.ValidString(r.Column) || names[r.Column] {
+		if strings.ContainsRune(r.Column, 0) || r.Column == "" || len(r.Column) > 128 || !utf8.ValidString(r.Column) || names[r.Column] {
 			return invalid("column names must be unique UTF-8 strings of 1 to 128 bytes")
 		}
 		names[r.Column] = true
