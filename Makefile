@@ -18,6 +18,6 @@ down:
 	docker compose down
 demo:
 	mkdir -p reports
-	docker compose run --rm cli demo -out /reports
+	docker compose run --rm --build --user "$$(id -u):$$(id -g)" cli demo -out /reports
 bench:
 	go test -run '^$$' -bench . -benchmem ./internal/validation

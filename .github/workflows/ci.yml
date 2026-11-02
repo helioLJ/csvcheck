@@ -1,0 +1,60 @@
+name: CI
+on:
+  push:
+    branches: [main]
+  pull_request:
+permissions:
+  contents: read
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    services:
+      postgres:
+        image: postgres:17.6-bookworm
+        env:
+          POSTGRES_USER: csvcheck
+          POSTGRES_PASSWORD: local-demo-only
+          POSTGRES_DB: csvcheck
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U csvcheck -d csvcheck"
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 20
+    env:
+      TEST_DATABASE_URL: postgres://csvcheck:local-demo-only@localhost:5432/csvcheck?sslmode=disable
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6
+        with:
+          go-version-file: go.mod
+          cache: true
+      - name: Check formatting
+        run: test -z "$(gofmt -l cmd internal)"
+      - name: Check modules
+        run: go mod verify
+      - name: Analyze code
+        run: go vet ./...
+      - name: Run unit and integration tests with race detection
+        run: go test -race -count=1 -coverprofile=coverage.out ./...
+      - name: Run bounded parser fuzzing
+        run: go test -run '^$' -fuzz FuzzRun -fuzztime=10s ./internal/validation
+      - name: Build containers
+        run: docker compose build
+      - name: Run the financial demo
+        run: |
+          docker compose up -d --scale worker=2
+          mkdir -p reports
+          docker compose run --rm --build --user "$(id -u):$(id -g)" cli demo -out /reports
+          python3 -c 'import json; s=json.load(open("reports/summary.json"))["summary"]; assert (s["records"],s["invalid_records"],s["violations"]) == (5,3,4)'
+      - name: Show container logs on failure
+        if: failure()
+        run: docker compose logs --no-color --tail=100
+      - name: Stop containers
+        if: always()
+        run: docker compose down

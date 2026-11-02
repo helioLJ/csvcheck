@@ -1,0 +1,5 @@
+record,column,code
+2,amount,below_minimum
+3,created_at,invalid_date
+4,transaction_id,required_value
+4,amount,below_minimum
